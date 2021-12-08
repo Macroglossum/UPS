@@ -24,7 +24,7 @@ int main (void)
 		return -1;
 	}
 	
-	memset(&remote_addr, 0, sizeof(struct sockaddr_in));
+	memset(remote_addr, 0, sizeof(struct sockaddr_in));
 
 	remote_addr.sin_family = AF_INET;
 	remote_addr.sin_port = htons(10000);
