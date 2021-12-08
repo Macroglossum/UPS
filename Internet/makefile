@@ -1,4 +1,4 @@
-CC=gcc
+CC=g++
 
 all:	clean client server
 
