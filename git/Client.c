@@ -5,47 +5,38 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <stdlib.h>
+#include <string.h>
 
 // POZOR: v tomto souboru je umyslne chyba, na cviceni bude opravena a pozdeji zverejnena
 //        opravena verze
 
-int main(void)
+int main (void)
 {
-	int client_socket;
+	int client_sock;
 	int return_value;
-	char cbuf;
-	int len_addr;
-	struct sockaddr_in my_addr;
-
-	client_socket = socket(AF_INET, SOCK_STREAM, 0);
+	struct sockaddr_in remote_addr;
 	
-	if (client_socket <= 0)
+	client_sock = socket(AF_INET, SOCK_STREAM, 0);
+
+	if (client_sock <= 0)
 	{
 		printf("Socket ERR\n");
 		return -1;
 	}
-
-	memset(&my_addr, 0, sizeof(struct sockaddr_in));
-
-	my_addr.sin_family = AF_INET;
-	my_addr.sin_port = htons(10000);
-	my_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-
-	return_value = connect(client_socket, (struct sockaddr *)&my_addr, sizeof(struct sockaddr_in));
-	if (return_value == 0) 
-		printf("Connect - OK\n");
-	else
-	{
-		printf("Connect - ERR\n");
-		return -1;
-	}
-
-	send(client_socket, "A", sizeof(char), 0);
-	printf("Poslano A\n");
-	send(client_socket, "B", sizeof(char), 0);
-	printf("Poslano B\n");
 	
-	close(client_socket);
+	memset(&remote_addr, 0, sizeof(struct sockaddr_in));
+
+	remote_addr.sin_family = AF_INET;
+	remote_addr.sin_port = htons(10001);
+	remote_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+	return_value = connect(client_sock, (struct sockaddr *)&remote_addr, sizeof(struct sockaddr_in));
+
+	send(client_sock, "A", sizeof(char), 0);
+	printf("Poslal jsem A\n");
+	write(client_sock, "B", sizeof(char));
+	printf("Poslal jsem X\n");
+	close(client_sock);
 
 	return 0;
 }
