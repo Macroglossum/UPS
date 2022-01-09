@@ -8,104 +8,122 @@
 #include <string.h>
 #include <pthread.h>
 
-// POZOR: v tomto souboru je umyslne chyba, na cviceni bude opravena a pozdeji zverejnena
-//        opravena verze
 
-// telo vlakna co obsluhuje prichozi spojeni
-void* serve_request(void *arg)
-{
-	int client_sock;
-	char cbuf='A';
 
-	// pretypujem parametr z netypoveho ukazate na ukazatel na int a dereferujeme
-	// --> to nam vrati puvodni socket
-	client_sock = *(int *) arg;
+// ;; vlakna co obsluhuje prichozi spojeni
+void *prijem(void *arg){
+	int client_sock_In = 0;
+	char cbuf[256]; //null
 
-	printf("(Vlakno:) Huraaa nove spojeni\n");
-	recv(client_sock, &cbuf, sizeof(char), 0);
-	printf("(Vlakno:) Dostal jsem %c\n",cbuf);
-	read(client_sock, &cbuf, sizeof(char));
-	printf("(Vlakno:) Dostal jsem %c\n",cbuf);
-	close(client_sock);
+	//pretypujem parametr z netypoveho ukazate na ukazatel na int
+	client_sock_In = *(int *) arg; /* vytazeni klientske adresy, socketu */
+	while(1){
+		recv(client_sock_In, &cbuf, 256*sizeof(char), 0);
+		cbuf[strlen(cbuf)] = '\0';
+		printf("(Vlakno_In-%d:) Dostal jsem %s\n", client_sock_In, cbuf);
+		
+		bzero(cbuf, 256);
+	}
+	close(client_sock_In);
 
-	// uvolnime pamet
+	// uvolnujeme pamet
 	free(arg);
-
 	return 0;
 }
 
-int main (void)
-{
-	int server_sock;
-	int client_sock;
+
+void *odesli(void *arg){
+	int client_sock_Out = 0;
+	char cbuf[256]; //null
+
+	//pretypujem parametr z netypoveho ukazate na ukazatel na int
+	client_sock_Out = *(int *) arg; /* vytazeni klientske adresy, socketu */
+	while(1){
+		fgets(cbuf,256, stdin); // nactu ze standartniho vstupu(konzole)
+		cbuf[strlen(cbuf)] = '\0';
+		send(client_sock_Out, &cbuf, strlen(cbuf), 0);
+		printf("(Vlakno_Out-%d:) Odeslal jsem %s\n", client_sock_Out, cbuf);
+
+		bzero(cbuf, 256);
+	}
+	// uvolnujeme pamet
+	free(arg);
+	return 0;
+}
+
+
+int main (void){
+
+	int server_socket;
+	int client_socket;
 	int return_value;
-	char cbuf;
-	int *th_socket;
-	struct sockaddr_in local_addr;
-	struct sockaddr_in remote_addr;
-	socklen_t remote_addr_len;
-	pthread_t thread_id;
-	
-	server_sock = socket(AF_INET, SOCK_STREAM, 0);
+	char cbuf[256];
+	int len_addr;
+	struct sockaddr_in my_addr, peer_addr;
 
-	if (server_sock <= 0)
-	{
-		printf("Socket ERR\n");
-		return -1;
-	}
-	
-	memset(&local_addr, 0, sizeof(struct sockaddr_in));
+	int *th_socket_In;
+	int *th_socket_Out;
+	pthread_t thread_id_In; /* kladaji se identifikatory vlakna */
+	pthread_t thread_id_Out;
 
-	local_addr.sin_family = AF_INET6;
-	local_addr.sin_port = htons(10000);
-	local_addr.sin_addr.s_addr = INADDR_ANY;
+	server_socket = socket(AF_INET, SOCK_STREAM, 0);
 
-	// nastavime parametr SO_REUSEADDR - "znovupouzije" puvodni socket, co jeste muze hnit v systemu bez predchoziho close
-	int param = 1;
-    return_value = setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, (const char*)&param, sizeof(int));
-	
-	if (return_value == -1)
-		printf("setsockopt ERR\n");
+	memset(&my_addr, 0, sizeof(struct sockaddr_in)); // nulovani pameti
 
-	return_value = bind(server_sock, (struct sockaddr *)&local_addr, sizeof(struct sockaddr_in));
+	my_addr.sin_family = AF_INET;
+	my_addr.sin_port = htons(10000);
+	my_addr.sin_addr.s_addr = INADDR_ANY;
 
-	if (return_value == 0)
-		printf("Bind OK\n");
-	else
-	{
-		printf("Bind ERR\n");
+	return_value = bind(server_socket, (struct sockaddr *) &my_addr, \
+			sizeof(struct sockaddr_in));
+
+	if (return_value == 0) 
+		printf("Bind - OK\n");
+	else {
+		printf("Bind - ERR\n");
 		return -1;
 	}
 
-	return_value = listen(server_sock, 5);
-	if (return_value == 0)
-		printf("Listen OK\n");
-	else
-	{
-		printf("Listen ERR\n");
+	return_value = listen(server_socket, 5);
+
+	if (return_value == 0) 
+		printf("Listen - OK\n");
+	else {
+		printf("Listen - ERR\n");
 		return -1;
 	}
 
+	for (;;){
+		client_socket = accept(server_socket, (struct sockaddr *) &peer_addr, &len_addr);
+		if (client_socket>0) {
+			printf("Hura nove spojeni\n");
 
-	while(1)
-	{
-		client_sock = accept(server_sock, (struct sockaddr *)&remote_addr, &remote_addr_len);
-		
-		if (client_sock > 0)
-		{
-			// misto forku vytvorime nove vlakno - je potreba alokovat pamet, predat ridici data
-			// (zde jen socket) a vlakno spustit
-			
-			th_socket = malloc(sizeof(int));
-			*th_socket = client_sock;
-			pthread_create(&thread_id, NULL, (void *)&serve_request, (void *)th_socket);
+
+			th_socket_In= (int *) malloc(sizeof(int));	// vyhrazuju si pamet na clientsky socket
+			*th_socket_In=client_socket;
+			th_socket_Out=(int *) malloc(sizeof(int));	
+			*th_socket_Out=client_socket;
+
+			pthread_create(&thread_id_In, NULL, (void *)&prijem, (void *)th_socket_In); /* vytvoreni vlakna a prevod na netypove ukazatele */
+			pthread_create(&thread_id_Out, NULL,(void *)&odesli, (void *)th_socket_Out); /* vytvoreni vlakna a prevod na netypove ukazatele */
+
+
 		}
-		else
-		{
-			printf("Brutal Fatal ERROR\n");
+		else {
+			printf ("Brutal Fatal ERROR\n");
 			return -1;
 		}
 	}
 
-return 0;
+	return 0;
 }
+
+
+
+
+
+
+
+
+
+
